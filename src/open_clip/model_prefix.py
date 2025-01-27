@@ -115,14 +115,18 @@ class CLIPWrapper(nn.Module):
         
         return pooled
     
-    def encode_image(self, image, normalize: bool = False):
+    def encode_image(self, image,tasks, normalize: bool = False):
         x = self.extract_image_tokens(image)
+        tasks = self.task_embeddings(tasks)
+        # print(x.shape)
+        # print(tasks.shape)
+        x = torch.cat((tasks.unsqueeze(1), x), dim=1)
         features = self.visual_transformer_forward_pass(x)
         return F.normalize(features, dim=-1) if normalize else features
     
     def forward(self,images,texts,tasks):
-        tasks = self.task_embeddings(tasks)
-        image_features = self.encode_image(images, normalize=True) if images is not None else None
+        # tasks = self.task_embeddings(tasks)
+        image_features = self.encode_image(images,tasks, normalize=True) if images is not None else None
         text_features = self.clip_model.encode_text(texts, normalize=True) if texts is not None else None
 
         if self.clip_model.output_dict:
@@ -239,8 +243,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 wrapped_model = CLIPWrapper(clip_model,5,768).to(device)
 
 # Freeze all parameters except task embeddings
-# for param in clip_model.parameters():
-#     param.requires_grad = False
+for param in wrapped_model.clip_model.parameters():
+    param.requires_grad = True
 for param in wrapped_model.task_embeddings.parameters():
     param.requires_grad = True
 
@@ -253,7 +257,7 @@ for param in wrapped_model.task_embeddings.parameters():
 # ]
 optimizer = torch.optim.Adam([
     {"params": wrapped_model.clip_model.parameters(), "lr": 1e-4},
-    {"params": wrapped_model.task_embeddings.parameters(), "lr": 1e-4}
+    {"params": wrapped_model.task_embeddings.parameters(), "lr": 1e-6}
 ])
 
 wrapped_model = wrapped_model.to(device)
@@ -298,12 +302,12 @@ for epoch in range(100):
             image_features /= image_features.norm(dim=-1, keepdim=True)
             text_features /= text_features.norm(dim=-1, keepdim=True)
             similarity_mat = text_features @ image_features.T
-            print(recall_at_k(similarity_mat, 1))
+            print(f"recall at k =1 scores: {recall_at_k(similarity_mat, 1)}")
     
     avg_val_loss = val_loss / len(train_dataloader)
     
     print(f"Epoch {epoch+1}/{10}, Val Loss: {avg_val_loss:.4f}")
-torch.save(clip_model.state_dict(), f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model.pth")
+# torch.save(clip_model.state_dict(), f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model.pth")
 
 # best_val_loss = float('inf')  # Initialize best validation loss to a large value
 # patience = 3 # Number of epochs to wait for improvement
