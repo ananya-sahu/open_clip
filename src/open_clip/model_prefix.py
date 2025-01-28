@@ -204,27 +204,31 @@ def recall_at_k(similarity_matrix, k):
     return recalls / num_queries
 
 #load data 
-one_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/one/")
-two_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/two/")
-three_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/three/")
-four_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/four/")
-five_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/five/")
+# one_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/one/")
+# two_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/two/")
+# three_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/three/")
+# four_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/four/")
+# five_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/five/")
 
 
-one_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/one/")
-two_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/two/")
-three_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/three/")
-four_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/four/")
-five_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/five/")
-with open("/home/as5957/vwp_metric/raw_prompts/train_prompts.pkl", 'rb') as file:
-    train = pickle.load(file)
+# one_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/one/")
+# two_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/two/")
+# three_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/three/")
+# four_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/four/")
+# five_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/five/")
+# with open("/home/as5957/vwp_metric/raw_prompts/train_prompts.pkl", 'rb') as file:
+#     train = pickle.load(file)
 
-with open("/home/as5957/vwp_metric/raw_prompts/val_prompts.pkl", 'rb') as file:
-    val = pickle.load(file)
+# with open("/home/as5957/vwp_metric/raw_prompts/val_prompts.pkl", 'rb') as file:
+#     val = pickle.load(file)
 
-train_all = get_image_path([one_train,two_train,three_train,four_train,five_train], train)
-val_all = get_image_path([one_val,two_val,three_val,four_val,five_val], val)
-train_items = {k: train_all[k] for k in list(train_all)[:10]}
+# train_all = get_image_path([one_train,two_train,three_train,four_train,five_train], train)
+# val_all = get_image_path([one_val,two_val,three_val,four_val,five_val], val)
+# train_items = {k: train_all[k] for k in list(train_all)[:100]}
+
+
+with open("./small_set.pkl", 'rb') as file:
+    train_items = pickle.load(file)
 
 # Load pretrained CLIP model
 clip_model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
@@ -232,11 +236,12 @@ tokenizer = open_clip.get_tokenizer('ViT-B-32')
 # train_dataset = CustomDataset(train_all,preprocess,tokenizer)
 train_dataset = CustomDataset(train_items,preprocess,tokenizer)
 # train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=512, num_workers = 8, shuffle=True) 
-train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True) 
+train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=100, shuffle=True) 
 
 # val_dataset = CustomDataset(val_all,preprocess,tokenizer)
 # val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=512,num_workers = 8, shuffle=True)
-val_loader = train_dataloader
+val_dataset = CustomDataset(train_items,preprocess,tokenizer)
+val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=100,shuffle=False)
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -256,8 +261,8 @@ for param in wrapped_model.task_embeddings.parameters():
 #         if param.name not in task_embeds_params
 # ]
 optimizer = torch.optim.Adam([
-    {"params": wrapped_model.clip_model.parameters(), "lr": 1e-4},
-    {"params": wrapped_model.task_embeddings.parameters(), "lr": 1e-6}
+    {"params": wrapped_model.clip_model.parameters(), "lr": 1e-5},
+    {"params": wrapped_model.task_embeddings.parameters(), "lr": 1e-4}
 ])
 
 wrapped_model = wrapped_model.to(device)
@@ -266,7 +271,7 @@ logit_scale = wrapped_model.clip_model.logit_scale
 print("here")
 
 # Training loop
-for epoch in range(100):
+for epoch in range(10):
     train_loss = 0.0
     wrapped_model.train() 
     for images, texts, task_ids in train_dataloader:
@@ -283,13 +288,13 @@ for epoch in range(100):
         loss.backward()
         optimizer.step()
     avg_train_loss = train_loss / len(train_dataloader)
-    print(f"Epoch {epoch+1}/{10}, Train Loss: {loss.item()}")
+    print(f"Epoch {epoch+1}/{10}, Train Loss: {avg_train_loss}")
 
     # Validation loop
     wrapped_model.eval() 
     val_loss = 0.0
     with torch.no_grad():
-        for images, texts, task_ids in train_dataloader:
+        for images, texts, task_ids in val_dataloader:
             images = images.to(device)
             texts = tokenizer(texts).to(device)
             task_ids = task_ids.to(device)
@@ -302,11 +307,11 @@ for epoch in range(100):
             image_features /= image_features.norm(dim=-1, keepdim=True)
             text_features /= text_features.norm(dim=-1, keepdim=True)
             similarity_mat = text_features @ image_features.T
-            print(f"recall at k =1 scores: {recall_at_k(similarity_mat, 1)}")
+            # print(f"recall at k =1 scores: {recall_at_k(similarity_mat, 1)}")
     
     avg_val_loss = val_loss / len(train_dataloader)
-    
     print(f"Epoch {epoch+1}/{10}, Val Loss: {avg_val_loss:.4f}")
+    print(f"recall at k =1 scores: {recall_at_k(similarity_mat, 1)}")
 # torch.save(clip_model.state_dict(), f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model.pth")
 
 # best_val_loss = float('inf')  # Initialize best validation loss to a large value
