@@ -317,7 +317,7 @@ print("start training")
 #     avg_val_loss = val_loss / len(train_dataloader)
 #     print(f"Epoch {epoch+1}/{10}, Val Loss: {avg_val_loss:.4f}")
 #     print(f"recall at k =1 scores: {recall_at_k(similarity_mat, 1)}")
-# torch.save(clip_model.state_dict(), f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model.pth")
+# torch.save(wrapped_model.state_dict(), f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model.pth")
 
 best_val_loss = float('inf')  # Initialize best validation loss to a large value
 patience = 3 # Number of epochs to wait for improvement
@@ -371,8 +371,8 @@ for epoch in range(10):
         print(f"Validation loss improved from {best_val_loss:.4f} to {avg_val_loss:.4f}. Saving model...")
         best_val_loss = avg_val_loss
         patience_counter = 0  # Reset patience counter
-        torch.save(clip_model.state_dict(), f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model.pth")
-        best_model = clip_model.state_dict()
+        torch.save(wrapped_model.state_dict(), f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model.pth")
+        best_model = wrapped_model.state_dict()
     else:
         patience_counter += 1
         print(f"No improvement in validation loss. Patience counter: {patience_counter}/{patience}")
