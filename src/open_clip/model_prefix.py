@@ -159,10 +159,15 @@ class CustomDataset(Dataset):
         caption, image_path, task_label = self.data[idx]
         image = Image.open(image_path).convert('RGB')
         image = self.preprocess(image)
-        if len(caption) > self.max_caption_length:  
-            caption = caption[:self.max_caption_length]  # Truncate if too long
-        elif len(caption) < self.max_caption_length:
-            caption = caption.ljust(self.max_caption_length, ' ')  # Pad if too short
+        # caption_tokens = self.tokenizer(caption)
+        # if caption_tokens > self.max_caption_length:
+        #     caption_tokens = caption_tokens[:77]
+        # elif caption_tokens < self.max_caption_length:
+        #     pass #we need to pad here 
+        # if len(caption) > self.max_caption_length:  
+        #     caption = caption[:self.max_caption_length]  # Truncate if too long
+        # elif len(caption) < self.max_caption_length:
+        #     caption = caption.ljust(self.max_caption_length, ' ')  # Pad if too short
         # Convert task label to tensor
         task_label = torch.tensor(task_label, dtype=torch.long)
 
@@ -204,44 +209,44 @@ def recall_at_k(similarity_matrix, k):
     return recalls / num_queries
 
 #load data 
-# one_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/one/")
-# two_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/two/")
-# three_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/three/")
-# four_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/four/")
-# five_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/five/")
+one_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/one/")
+two_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/two/")
+three_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/three/")
+four_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/four/")
+five_train = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/train/five/")
 
 
-# one_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/one/")
-# two_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/two/")
-# three_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/three/")
-# four_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/four/")
-# five_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/five/")
-# with open("/home/as5957/vwp_metric/raw_prompts/train_prompts.pkl", 'rb') as file:
-#     train = pickle.load(file)
+one_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/one/")
+two_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/two/")
+three_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/three/")
+four_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/four/")
+five_val = load_pkl_files_to_dict("/home/as5957/vwp_metric/all_molmo_captions/val/five/")
+with open("/home/as5957/vwp_metric/raw_prompts/train_prompts.pkl", 'rb') as file:
+    train = pickle.load(file)
 
-# with open("/home/as5957/vwp_metric/raw_prompts/val_prompts.pkl", 'rb') as file:
-#     val = pickle.load(file)
+with open("/home/as5957/vwp_metric/raw_prompts/val_prompts.pkl", 'rb') as file:
+    val = pickle.load(file)
 
-# train_all = get_image_path([one_train,two_train,three_train,four_train,five_train], train)
-# val_all = get_image_path([one_val,two_val,three_val,four_val,five_val], val)
+train_all = get_image_path([one_train,two_train,three_train,four_train,five_train], train)
+val_all = get_image_path([one_val,two_val,three_val,four_val,five_val], val)
 # train_items = {k: train_all[k] for k in list(train_all)[:100]}
 
 
-with open("./small_set.pkl", 'rb') as file:
-    train_items = pickle.load(file)
+# with open("./small_set.pkl", 'rb') as file:
+#     train_items = pickle.load(file)
 
 # Load pretrained CLIP model
 clip_model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
 tokenizer = open_clip.get_tokenizer('ViT-B-32')
-# train_dataset = CustomDataset(train_all,preprocess,tokenizer)
-train_dataset = CustomDataset(train_items,preprocess,tokenizer)
-# train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=512, num_workers = 8, shuffle=True) 
-train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=100, shuffle=True) 
+train_dataset = CustomDataset(train_all,preprocess,tokenizer)
+# train_dataset = CustomDataset(train_items,preprocess,tokenizer)
+train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=512, num_workers = 8, shuffle=True) 
+# train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=100, shuffle=True) 
 
-# val_dataset = CustomDataset(val_all,preprocess,tokenizer)
-# val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=512,num_workers = 8, shuffle=True)
-val_dataset = CustomDataset(train_items,preprocess,tokenizer)
-val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=100,shuffle=False)
+val_dataset = CustomDataset(val_all,preprocess,tokenizer)
+val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=512,num_workers = 8, shuffle=True)
+# val_dataset = CustomDataset(train_items,preprocess,tokenizer)
+# val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=100,shuffle=False)
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -268,13 +273,60 @@ optimizer = torch.optim.Adam([
 wrapped_model = wrapped_model.to(device)
 criterion = nn.CrossEntropyLoss()
 logit_scale = wrapped_model.clip_model.logit_scale
-print("here")
+print("start training")
 
-# Training loop
+# # Training loop
+# for epoch in range(10):
+#     train_loss = 0.0
+#     wrapped_model.train() 
+#     for images, texts, task_ids in train_dataloader:
+#         images = images.to(device)
+#         texts = tokenizer(texts).to(device)
+#         task_ids = task_ids.to(device)
+#         optimizer.zero_grad()
+        
+#         image_features, text_features, l_scale = wrapped_model(images,texts,task_ids)
+        
+#         # Compute loss (e.g., contrastive loss)
+#         loss = compute_loss(image_features, text_features,criterion,l_scale )
+#         train_loss += loss.item()
+#         loss.backward()
+#         optimizer.step()
+#     avg_train_loss = train_loss / len(train_dataloader)
+#     print(f"Epoch {epoch+1}/{10}, Train Loss: {avg_train_loss}")
+
+#     # Validation loop
+#     wrapped_model.eval() 
+#     val_loss = 0.0
+#     with torch.no_grad():
+#         for images, texts, task_ids in val_dataloader:
+#             images = images.to(device)
+#             texts = tokenizer(texts).to(device)
+#             task_ids = task_ids.to(device)
+            
+#             image_features, text_features, l_scale = wrapped_model(images,texts,task_ids)
+            
+#             loss = compute_loss(image_features, text_features,criterion, l_scale)
+#             val_loss += loss.item()
+
+#             image_features /= image_features.norm(dim=-1, keepdim=True)
+#             text_features /= text_features.norm(dim=-1, keepdim=True)
+#             similarity_mat = text_features @ image_features.T
+#             # print(f"recall at k =1 scores: {recall_at_k(similarity_mat, 1)}")
+    
+#     avg_val_loss = val_loss / len(train_dataloader)
+#     print(f"Epoch {epoch+1}/{10}, Val Loss: {avg_val_loss:.4f}")
+#     print(f"recall at k =1 scores: {recall_at_k(similarity_mat, 1)}")
+# torch.save(clip_model.state_dict(), f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model.pth")
+
+best_val_loss = float('inf')  # Initialize best validation loss to a large value
+patience = 3 # Number of epochs to wait for improvement
+patience_counter = 0  # Counter for early stopping
+best_model = None
 for epoch in range(10):
     train_loss = 0.0
-    wrapped_model.train() 
-    for images, texts, task_ids in train_dataloader:
+    wrapped_model.train()  # Set model to training mode
+    for images, texts, task_ids in tqdm(train_dataloader):
         images = images.to(device)
         texts = tokenizer(texts).to(device)
         task_ids = task_ids.to(device)
@@ -283,94 +335,51 @@ for epoch in range(10):
         image_features, text_features, l_scale = wrapped_model(images,texts,task_ids)
         
         # Compute loss (e.g., contrastive loss)
-        loss = compute_loss(image_features, text_features,criterion,l_scale )
+        loss = compute_loss(image_features, text_features, criterion,l_scale)
         train_loss += loss.item()
         loss.backward()
         optimizer.step()
+    
     avg_train_loss = train_loss / len(train_dataloader)
-    print(f"Epoch {epoch+1}/{10}, Train Loss: {avg_train_loss}")
+    print(f"Epoch {epoch+1}/100, Train Loss: {avg_train_loss:.4f}")
 
     # Validation loop
-    wrapped_model.eval() 
+    wrapped_model.eval()  # Set model to evaluation mode
     val_loss = 0.0
     with torch.no_grad():
-        for images, texts, task_ids in val_dataloader:
+        for images, texts, task_ids in tqdm(val_dataloader):
             images = images.to(device)
             texts = tokenizer(texts).to(device)
             task_ids = task_ids.to(device)
             
             image_features, text_features, l_scale = wrapped_model(images,texts,task_ids)
-            
-            loss = compute_loss(image_features, text_features,criterion, l_scale)
+        
+            # Compute loss (e.g., contrastive loss)
+            loss = compute_loss(image_features, text_features, criterion,l_scale)
             val_loss += loss.item()
-
             image_features /= image_features.norm(dim=-1, keepdim=True)
             text_features /= text_features.norm(dim=-1, keepdim=True)
             similarity_mat = text_features @ image_features.T
-            # print(f"recall at k =1 scores: {recall_at_k(similarity_mat, 1)}")
     
-    avg_val_loss = val_loss / len(train_dataloader)
-    print(f"Epoch {epoch+1}/{10}, Val Loss: {avg_val_loss:.4f}")
+    avg_val_loss = val_loss / len(val_dataloader)
+    print(f"Epoch {epoch+1}/100, Val Loss: {avg_val_loss:.4f}")
     print(f"recall at k =1 scores: {recall_at_k(similarity_mat, 1)}")
-# torch.save(clip_model.state_dict(), f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model.pth")
 
-# best_val_loss = float('inf')  # Initialize best validation loss to a large value
-# patience = 3 # Number of epochs to wait for improvement
-# patience_counter = 0  # Counter for early stopping
-# best_model = None
-# for epoch in range(10):
-#     train_loss = 0.0
-#     clip_model.train()  # Set model to training mode
-#     for images, texts, task_ids in tqdm(train_dataloader):
-#         images = images.to(device)
-#         texts = tokenizer(texts).to(device)
-#         task_ids = task_ids.to(device)
-#         optimizer.zero_grad()
-        
-#         image_features = clip_model.visual(images, task_ids)
-#         text_features = clip_model.encode_text(texts)
-        
-#         # Compute loss (e.g., contrastive loss)
-#         loss = compute_loss(image_features, text_features, criterion,logit_scale)
-#         train_loss += loss.item()
-#         loss.backward()
-#         optimizer.step()
-    
-#     avg_train_loss = train_loss / len(train_dataloader)
-#     print(f"Epoch {epoch+1}/100, Train Loss: {avg_train_loss:.4f}")
 
-#     # Validation loop
-#     clip_model.eval()  # Set model to evaluation mode
-#     val_loss = 0.0
-#     with torch.no_grad():
-#         for images, texts, task_ids in tqdm(val_dataloader):
-#             images = images.to(device)
-#             texts = tokenizer(texts).to(device)
-#             task_ids = task_ids.to(device)
-            
-#             image_features = clip_model.visual(images, task_ids)
-#             text_features = clip_model.encode_text(texts)
-            
-#             loss = compute_loss(image_features, text_features, criterion,logit_scale)
-#             val_loss += loss.item()
+    # Save model if validation loss improves
+    if avg_val_loss < best_val_loss or epoch == 0:
+        print(f"Validation loss improved from {best_val_loss:.4f} to {avg_val_loss:.4f}. Saving model...")
+        best_val_loss = avg_val_loss
+        patience_counter = 0  # Reset patience counter
+        torch.save(clip_model.state_dict(), f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model.pth")
+        best_model = clip_model.state_dict()
+    else:
+        patience_counter += 1
+        print(f"No improvement in validation loss. Patience counter: {patience_counter}/{patience}")
     
-#     avg_val_loss = val_loss / len(val_dataloader)
-#     print(f"Epoch {epoch+1}/100, Val Loss: {avg_val_loss:.4f}")
-
-#     # Save model if validation loss improves
-#     if avg_val_loss < best_val_loss or epoch == 0:
-#         print(f"Validation loss improved from {best_val_loss:.4f} to {avg_val_loss:.4f}. Saving model...")
-#         best_val_loss = avg_val_loss
-#         patience_counter = 0  # Reset patience counter
-#         torch.save(clip_model.state_dict(), f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model.pth")
-#         best_model = clip_model.state_dict()
-#     else:
-#         patience_counter += 1
-#         print(f"No improvement in validation loss. Patience counter: {patience_counter}/{patience}")
-    
-#     # Stop saving after patience limit
-#     if patience_counter > patience:
-#         torch.save(best_model, f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model.pth")
-#         print(f"Patience limit exceeded. No more saving at epoch {epoch}")
-#         break
+    # Stop saving after patience limit
+    if patience_counter > patience:
+        torch.save(best_model, f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model.pth")
+        print(f"Patience limit exceeded. No more saving at epoch {epoch}")
+        break
 
