@@ -291,7 +291,7 @@ wrapped_model = wrapped_model.to(device)
 criterion = nn.CrossEntropyLoss()
 print("start training")
 
-w_1,w_2 = 0.4,0.6 #weights for the losses 
+w_1,w_2 = 0.6,0.4 #weights for the losses 
 best_val_loss = float('inf')  # Initialize best validation loss to a large value
 patience = 3 # Number of epochs to wait for improvement
 patience_counter = 0  # Counter for early stopping
