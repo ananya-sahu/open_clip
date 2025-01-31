@@ -72,7 +72,7 @@ def get_data_balanced(train_all):
 
     train_all_reorg = {}
     i = 0
-    while i < 1671835:
+    while i < len(train_all):
         for img in reorg:
             for label in reorg[img]:
                 if len(reorg[img][label]) > 0:
