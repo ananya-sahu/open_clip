@@ -135,12 +135,18 @@ class CLIPWrapper(nn.Module):
         
         return pooled
     
-    def encode_image(self, image,tasks, normalize: bool = False):
+    def encode_image(self, image,tasks,mode = 'first', normalize: bool = False):
         x = self.extract_image_tokens(image)
         tasks = self.task_embeddings(tasks)
-        # print(x.shape)
-        # print(tasks.shape)
-        x = torch.cat((tasks.unsqueeze(1), x), dim=1)
+        if mode == 'first':
+            x = torch.cat((tasks.unsqueeze(1), x), dim=1)
+        if mode == 'second':
+            cls_token, image_tokens = x[:, :1, :], x[:, 1:, :]  # CLS token and remaining patches
+            # Step 4: Insert task embeddings in between
+            task_embedding = task_embedding.unsqueeze(1)  # Ensure shape [batch, 1, width]
+            x = torch.cat([cls_token, task_embedding, image_tokens], dim=1)
+        if mode == 'third':
+             x = torch.cat((x,tasks.unsqueeze(1)), dim=1)
         features = self.visual_transformer_forward_pass(x)
         return F.normalize(features, dim=-1) if normalize else features
     
