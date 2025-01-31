@@ -140,22 +140,21 @@ class CLIPWrapper(nn.Module):
     def encode_image(self, image,tasks,mode = 'first', normalize: bool = False):
         x = self.extract_image_tokens(image)
         # tasks = self.task_embeddings(tasks)
-        tasks = torch.stack([embed(task_ids) for embed in self.task_embeddings], dim=1)
+        task_emebds = torch.stack([embed(tasks) for embed in self.task_embeddings], dim=1)
         if mode == 'first':
-            x = torch.cat((tasks, x), dim=1)
+            x = torch.cat((task_emebds, x), dim=1)
         if mode == 'second':
             cls_token, image_tokens = x[:, :1, :], x[:, 1:, :]  # CLS token and remaining patches
             # Step 4: Insert task embeddings in between
-            task_embedding = task_embedding.unsqueeze(1)  # Ensure shape [batch, 1, width]
-            x = torch.cat([cls_token, task_embedding, image_tokens], dim=1)
+            x = torch.cat([cls_token, task_emebds, image_tokens], dim=1)
         if mode == 'third':
-             x = torch.cat((x,tasks), dim=1)
+             x = torch.cat((x,task_emebds), dim=1)
         features = self.visual_transformer_forward_pass(x)
         return F.normalize(features, dim=-1) if normalize else features
     
     def forward(self,images,texts,tasks):
         # tasks = self.task_embeddings(tasks)
-        image_features = self.encode_image(images,tasks, normalize=True) if images is not None else None
+        image_features = self.encode_image(images,tasks,mode = 'second', normalize=True) if images is not None else None
         text_features = self.clip_model.encode_text(texts, normalize=True) if texts is not None else None
 
         if self.clip_model.output_dict:
@@ -298,37 +297,31 @@ patience = 3 # Number of epochs to wait for improvement
 patience_counter = 0  # Counter for early stopping
 best_model = None
 for epoch in range(10):
-    train_loss_1 = 0.0
-    train_loss_2 = 0.0
+    train_loss = 0.0
     wrapped_model.train()  # Set model to training mode
-    for images,texts, task_ids in tqdm(train_dataloader_1):
-        images = images.to(device)
-        texts = tokenizer(texts).to(device)
-        task_ids = task_ids.to(device)
+    for (images1,texts1, task_ids1),(images2,texts2, task_ids2) in tqdm(zip(train_dataloader_1,train_dataloader_2)):
+        images1 = images1.to(device)
+        texts1 = tokenizer(texts1).to(device)
+        task_ids1 = task_ids1.to(device)
+        
+        images2 = images2.to(device)
+        texts2 = tokenizer(texts2).to(device)
+        task_ids2 = task_ids2.to(device)
+
         optimizer.zero_grad()
         
-        image_features,text_features, l_scale = wrapped_model(images,texts,task_ids)
-        
-        # Compute loss (e.g., contrastive loss)
-        loss = compute_loss(image_features, text_features, criterion,l_scale)
-        train_loss_1 += loss.item()
+        image_features1,text_features1, l_scale1 = wrapped_model(images1,texts1,task_ids1)
+        image_features2,text_features2, l_scale2 = wrapped_model(images2,texts2,task_ids2)
+
+        loss1 = compute_loss(image_features1, text_features1, criterion,l_scale1)
+        loss2 = compute_loss(image_features2, text_features2, criterion,l_scale2)
+     
+        loss = (w_1*loss1) + (w_2*loss2)
+        train_loss += loss.item()
         loss.backward()
         optimizer.step()
-    for images,texts, task_ids in tqdm(train_dataloader_2):
-        images = images.to(device)
-        texts = tokenizer(texts).to(device)
-        task_ids = task_ids.to(device)
-        optimizer.zero_grad()
-        
-        image_features, text_features, l_scale = wrapped_model(images,texts,task_ids)
-        
-        # Compute loss (e.g., contrastive loss)
-        loss = compute_loss(image_features, text_features, criterion,l_scale)
-        train_loss_2 += loss.item()
-        loss.backward()
-        optimizer.step()
-    train_loss_total = w_1*train_loss_1 + w_2*train_loss_2
-    avg_train_loss = train_loss_total / len(train_dataloader_1)
+
+    avg_train_loss = train_loss  / len(train_dataloader_1)
     print(f"Epoch {epoch+1}/100, Train Loss: {avg_train_loss:.4f}")
 
     # Validation loop
