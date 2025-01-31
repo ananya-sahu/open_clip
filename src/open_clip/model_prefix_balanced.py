@@ -84,11 +84,12 @@ def get_data_balanced(train_all):
     return train_all_reorg
 
 class CLIPWrapper(nn.Module):
-    def __init__(self, clip_model,num_tasks,clip_dim):
+    def __init__(self, clip_model,num_tasks,clip_dim,method = 'first'):
         super().__init__()  # Properly initialize the nn.Module superclass
         self.clip_model = clip_model
         # self.task_embeddings = nn.Embedding(num_tasks, clip_dim)
         self.task_embeddings = nn.ModuleList([nn.Embedding(num_tasks, clip_dim) for _ in range(num_tasks)])
+        self.method = method
 
     def extract_image_tokens(self,images):
         vision_trans = self.clip_model.visual
@@ -155,7 +156,7 @@ class CLIPWrapper(nn.Module):
     
     def forward(self,images,texts,tasks):
         # tasks = self.task_embeddings(tasks)
-        image_features = self.encode_image(images,tasks,mode = 'second', normalize=True) if images is not None else None
+        image_features = self.encode_image(images,tasks,mode = self.method, normalize=True) if images is not None else None
         text_features = self.clip_model.encode_text(texts, normalize=True) if texts is not None else None
 
         if self.clip_model.output_dict:
@@ -278,26 +279,26 @@ with open("./small_set.pkl", 'rb') as file:
 clip_model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
 tokenizer = open_clip.get_tokenizer('ViT-B-32')
 
-# train_dataset_1 = CustomDataset(train_all,preprocess,tokenizer)
-# train_dataloader_1 = torch.utils.data.DataLoader(train_dataset_1, batch_size=512, num_workers = 8, shuffle=True) 
-train_dataset = CustomDataset(train_items,preprocess,tokenizer)
-train_dataloader_1 = torch.utils.data.DataLoader(train_dataset, batch_size=100, shuffle=True) 
-train_all_reorg = get_data_balanced(train_items)
-# train_all_reorg = get_data_balanced(train_all)
+train_dataset_1 = CustomDataset(train_all,preprocess,tokenizer)
+train_dataloader_1 = torch.utils.data.DataLoader(train_dataset_1, batch_size=256, num_workers = 8, shuffle=True) 
+# train_dataset = CustomDataset(train_items,preprocess,tokenizer)
+# train_dataloader_1 = torch.utils.data.DataLoader(train_dataset, batch_size=100, shuffle=True) 
+# train_all_reorg = get_data_balanced(train_items)
+train_all_reorg = get_data_balanced(train_all)
 train_dataset_2 = CustomDataset(train_all_reorg,preprocess,tokenizer)
 # train_dataloader_2 = torch.utils.data.DataLoader(train_dataset_2, batch_size=512,num_workers = 8, shuffle=False) 
-batch_sampler = ShuffledBatchSampler(train_dataset_2, batch_size = 100)
-train_dataloader_2 = torch.utils.data.DataLoader(train_dataset_2, batch_sampler=batch_sampler)
-# train_dataloader_2 = torch.utils.data.DataLoader(train_dataset_2, batch_size=100, shuffle=False) 
+batch_sampler = ShuffledBatchSampler(train_dataset_2, batch_size = 256)
+train_dataloader_2 = torch.utils.data.DataLoader(train_dataset_2, batch_sampler=batch_sampler,num_workers = 8)
+# train_dataloader_2 = torch.utils.data.DataLoader(train_dataset_2, batch_size=512, shuffle=False) 
 
-# val_dataset = CustomDataset(val_all,preprocess,tokenizer)
-# val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=512,num_workers = 8, shuffle=False)
-val_dataset = CustomDataset(train_items,preprocess,tokenizer)
-val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=100,shuffle=False)
+val_dataset = CustomDataset(val_all,preprocess,tokenizer)
+val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=512,num_workers = 8, shuffle=False)
+# val_dataset = CustomDataset(train_items,preprocess,tokenizer)
+# val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=100,shuffle=False)
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-wrapped_model = CLIPWrapper(clip_model,5,768).to(device)
+wrapped_model = CLIPWrapper(clip_model,5,768, method='third').to(device)
 
 # Freeze all parameters except task embeddings
 for param in wrapped_model.clip_model.parameters():
@@ -319,6 +320,7 @@ best_val_loss = float('inf')  # Initialize best validation loss to a large value
 patience = 3 # Number of epochs to wait for improvement
 patience_counter = 0  # Counter for early stopping
 best_model = None
+best_recall = 0
 for epoch in range(10):
     train_loss = 0.0
     wrapped_model.train()  # Set model to training mode
@@ -368,24 +370,26 @@ for epoch in range(10):
             avg_recall += recall_at_k(similarity_mat, 1)
     
     avg_val_loss = val_loss / len(val_dataloader)
+    avg_recall = avg_recall/len(val_dataloader)
     print(f"Epoch {epoch+1}/100, Val Loss: {avg_val_loss:.4f}")
-    print(f"recall at k =1 scores: {avg_recall/len(val_dataloader)}")
+    print(f"recall at k =1 scores: {avg_recall}")
 
 
-    # # Save model if validation loss improves
-    # if avg_val_loss < best_val_loss or epoch == 0:
-    #     print(f"Validation loss improved from {best_val_loss:.4f} to {avg_val_loss:.4f}. Saving model...")
-    #     best_val_loss = avg_val_loss
-    #     patience_counter = 0  # Reset patience counter
-    #     torch.save(wrapped_model.state_dict(), f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model_balanced.pth")
-    #     best_model = wrapped_model.state_dict()
-    # else:
-    #     patience_counter += 1
-    #     print(f"No improvement in validation loss. Patience counter: {patience_counter}/{patience}")
+    # Save model if validation loss improves
+    if avg_val_loss < best_val_loss or epoch == 0 or avg_recall > best_recall:
+        print(f"Validation loss improved from {best_val_loss:.4f} to {avg_val_loss:.4f}. Saving model...")
+        best_val_loss = avg_val_loss
+        avg_recall = best_recall
+        patience_counter = 0  # Reset patience counter
+        torch.save(wrapped_model.state_dict(), f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model_balanced_third.pth")
+        best_model = wrapped_model.state_dict()
+    else:
+        patience_counter += 1
+        print(f"No improvement in validation loss. Patience counter: {patience_counter}/{patience}")
     
-    # # Stop saving after patience limit
-    # if patience_counter > patience:
-    #     torch.save(best_model, f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model_balanced.pth")
-    #     print(f"Patience limit exceeded. No more saving at epoch {epoch}")
-    #     break
+    # Stop saving after patience limit
+    if patience_counter > patience:
+        torch.save(best_model, f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model_balanced_third.pth")
+        print(f"Patience limit exceeded. No more saving at epoch {epoch}")
+        break
 
