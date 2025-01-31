@@ -86,7 +86,9 @@ class CLIPWrapper(nn.Module):
     def __init__(self, clip_model,num_tasks,clip_dim):
         super().__init__()  # Properly initialize the nn.Module superclass
         self.clip_model = clip_model
-        self.task_embeddings = nn.Embedding(num_tasks, clip_dim)
+        # self.task_embeddings = nn.Embedding(num_tasks, clip_dim)
+        self.task_embeddings = nn.ModuleList([nn.Embedding(num_tasks, clip_dim) for _ in range(num_tasks)])
+
     def extract_image_tokens(self,images):
         vision_trans = self.clip_model.visual
         images = vision_trans.conv1(images)  # shape = [*, width, grid, grid]\
@@ -137,16 +139,17 @@ class CLIPWrapper(nn.Module):
     
     def encode_image(self, image,tasks,mode = 'first', normalize: bool = False):
         x = self.extract_image_tokens(image)
-        tasks = self.task_embeddings(tasks)
+        # tasks = self.task_embeddings(tasks)
+        tasks = torch.stack([embed(task_ids) for embed in self.task_embeddings], dim=1)
         if mode == 'first':
-            x = torch.cat((tasks.unsqueeze(1), x), dim=1)
+            x = torch.cat((tasks, x), dim=1)
         if mode == 'second':
             cls_token, image_tokens = x[:, :1, :], x[:, 1:, :]  # CLS token and remaining patches
             # Step 4: Insert task embeddings in between
             task_embedding = task_embedding.unsqueeze(1)  # Ensure shape [batch, 1, width]
             x = torch.cat([cls_token, task_embedding, image_tokens], dim=1)
         if mode == 'third':
-             x = torch.cat((x,tasks.unsqueeze(1)), dim=1)
+             x = torch.cat((x,tasks), dim=1)
         features = self.visual_transformer_forward_pass(x)
         return F.normalize(features, dim=-1) if normalize else features
     
@@ -254,18 +257,21 @@ with open("./small_set.pkl", 'rb') as file:
 # Load pretrained CLIP model
 clip_model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
 tokenizer = open_clip.get_tokenizer('ViT-B-32')
-train_dataset_1 = CustomDataset(train_all,preprocess,tokenizer)
-train_dataloader_1 = torch.utils.data.DataLoader(train_dataset_1, batch_size=512, num_workers = 8, shuffle=True) 
-# train_dataset = CustomDataset(train_items,preprocess,tokenizer)
-# train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=100, shuffle=True) 
-train_all_reorg = get_data_balanced(train_all)
-train_dataset_2 = CustomDataset(train_all_reorg,preprocess,tokenizer)
-train_dataloader_2 = torch.utils.data.DataLoader(train_dataset_2, batch_size=512,num_workers = 8, shuffle=False) 
 
-val_dataset = CustomDataset(val_all,preprocess,tokenizer)
-val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=512,num_workers = 8, shuffle=False)
-# val_dataset = CustomDataset(train_items,preprocess,tokenizer)
-# val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=100,shuffle=False)
+# train_dataset_1 = CustomDataset(train_all,preprocess,tokenizer)
+# train_dataloader_1 = torch.utils.data.DataLoader(train_dataset_1, batch_size=512, num_workers = 8, shuffle=True) 
+train_dataset = CustomDataset(train_items,preprocess,tokenizer)
+train_dataloader_1 = torch.utils.data.DataLoader(train_dataset, batch_size=100, shuffle=True) 
+train_all_reorg = get_data_balanced(train_items)
+# train_all_reorg = get_data_balanced(train_all)
+train_dataset_2 = CustomDataset(train_all_reorg,preprocess,tokenizer)
+# train_dataloader_2 = torch.utils.data.DataLoader(train_dataset_2, batch_size=512,num_workers = 8, shuffle=False) 
+train_dataloader_2 = torch.utils.data.DataLoader(train_dataset_2, batch_size=100, shuffle=False) 
+
+# val_dataset = CustomDataset(val_all,preprocess,tokenizer)
+# val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=512,num_workers = 8, shuffle=False)
+val_dataset = CustomDataset(train_items,preprocess,tokenizer)
+val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=100,shuffle=False)
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -277,13 +283,6 @@ for param in wrapped_model.clip_model.parameters():
 for param in wrapped_model.task_embeddings.parameters():
     param.requires_grad = True
 
-# Set up optimizer (only for task embeddings)
-# optimizer = torch.optim.Adam(wrapped_model.parameters(), lr=1e-4)
-# task_embeds_params = [param.name for param in clip_model.visual.task_embeddings.parameters()]
-# other_params = [
-#     param for param in clip_model.parameters()
-#         if param.name not in task_embeds_params
-# ]
 optimizer = torch.optim.Adam([
     {"params": wrapped_model.clip_model.parameters(), "lr": 1e-5},
     {"params": wrapped_model.task_embeddings.parameters(), "lr": 1e-4}
@@ -291,52 +290,7 @@ optimizer = torch.optim.Adam([
 
 wrapped_model = wrapped_model.to(device)
 criterion = nn.CrossEntropyLoss()
-# logit_scale = wrapped_model.clip_model.logit_scale
 print("start training")
-
-# # Training loop
-# for epoch in range(10):
-#     train_loss = 0.0
-#     wrapped_model.train() 
-#     for images, texts, task_ids in train_dataloader:
-#         images = images.to(device)
-#         texts = tokenizer(texts).to(device)
-#         task_ids = task_ids.to(device)
-#         optimizer.zero_grad()
-        
-#         image_features, text_features, l_scale = wrapped_model(images,texts,task_ids)
-        
-#         # Compute loss (e.g., contrastive loss)
-#         loss = compute_loss(image_features, text_features,criterion,l_scale )
-#         train_loss += loss.item()
-#         loss.backward()
-#         optimizer.step()
-#     avg_train_loss = train_loss / len(train_dataloader)
-#     print(f"Epoch {epoch+1}/{10}, Train Loss: {avg_train_loss}")
-
-#     # Validation loop
-#     wrapped_model.eval() 
-#     val_loss = 0.0
-#     with torch.no_grad():
-#         for images, texts, task_ids in val_dataloader:
-#             images = images.to(device)
-#             texts = tokenizer(texts).to(device)
-#             task_ids = task_ids.to(device)
-            
-#             image_features, text_features, l_scale = wrapped_model(images,texts,task_ids)
-            
-#             loss = compute_loss(image_features, text_features,criterion, l_scale)
-#             val_loss += loss.item()
-
-#             image_features /= image_features.norm(dim=-1, keepdim=True)
-#             text_features /= text_features.norm(dim=-1, keepdim=True)
-#             similarity_mat = text_features @ image_features.T
-#             # print(f"recall at k =1 scores: {recall_at_k(similarity_mat, 1)}")
-    
-#     avg_val_loss = val_loss / len(train_dataloader)
-#     print(f"Epoch {epoch+1}/{10}, Val Loss: {avg_val_loss:.4f}")
-#     print(f"recall at k =1 scores: {recall_at_k(similarity_mat, 1)}")
-# torch.save(wrapped_model.state_dict(), f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model.pth")
 
 w_1,w_2 = 0.4,0.6 #weights for the losses 
 best_val_loss = float('inf')  # Initialize best validation loss to a large value
@@ -380,6 +334,7 @@ for epoch in range(10):
     # Validation loop
     wrapped_model.eval()  # Set model to evaluation mode
     val_loss = 0.0
+    avg_recall = 0.0
     with torch.no_grad():
         for images,texts, task_ids in tqdm(val_dataloader):
             images = images.to(device)
@@ -394,26 +349,27 @@ for epoch in range(10):
             image_features /= image_features.norm(dim=-1, keepdim=True)
             text_features /= text_features.norm(dim=-1, keepdim=True)
             similarity_mat = text_features @ image_features.T
+            avg_recall += recall_at_k(similarity_mat, 1)
     
     avg_val_loss = val_loss / len(val_dataloader)
     print(f"Epoch {epoch+1}/100, Val Loss: {avg_val_loss:.4f}")
-    print(f"recall at k =1 scores: {recall_at_k(similarity_mat, 1)}")
+    print(f"recall at k =1 scores: {avg_recall/len(val_dataloader)}")
 
 
-    # Save model if validation loss improves
-    if avg_val_loss < best_val_loss or epoch == 0:
-        print(f"Validation loss improved from {best_val_loss:.4f} to {avg_val_loss:.4f}. Saving model...")
-        best_val_loss = avg_val_loss
-        patience_counter = 0  # Reset patience counter
-        torch.save(wrapped_model.state_dict(), f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model_balanced.pth")
-        best_model = wrapped_model.state_dict()
-    else:
-        patience_counter += 1
-        print(f"No improvement in validation loss. Patience counter: {patience_counter}/{patience}")
+    # # Save model if validation loss improves
+    # if avg_val_loss < best_val_loss or epoch == 0:
+    #     print(f"Validation loss improved from {best_val_loss:.4f} to {avg_val_loss:.4f}. Saving model...")
+    #     best_val_loss = avg_val_loss
+    #     patience_counter = 0  # Reset patience counter
+    #     torch.save(wrapped_model.state_dict(), f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model_balanced.pth")
+    #     best_model = wrapped_model.state_dict()
+    # else:
+    #     patience_counter += 1
+    #     print(f"No improvement in validation loss. Patience counter: {patience_counter}/{patience}")
     
-    # Stop saving after patience limit
-    if patience_counter > patience:
-        torch.save(best_model, f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model_balanced.pth")
-        print(f"Patience limit exceeded. No more saving at epoch {epoch}")
-        break
+    # # Stop saving after patience limit
+    # if patience_counter > patience:
+    #     torch.save(best_model, f"/home/as5957/vwp_metric/fine_tuned_clip/our_creative_full/clip_model_balanced.pth")
+    #     print(f"Patience limit exceeded. No more saving at epoch {epoch}")
+    #     break
 
