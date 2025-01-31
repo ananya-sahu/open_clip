@@ -6,6 +6,7 @@ import copy
 import logging
 import math
 import pickle
+import random
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple, Union
 import os 
@@ -19,7 +20,7 @@ from PIL import Image
 from torch.utils.checkpoint import checkpoint
 from functools import partial
 from torch import nn
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset,Sampler
 from torchvision import transforms
 from open_clip.transformer import VisionTransformer, LayerNormFp32,LayerNorm
 from open_clip.model import  CLIPVisionCfg
@@ -191,6 +192,26 @@ class CustomDataset(Dataset):
 
         return image,caption, task_label
 
+class ShuffledBatchSampler(Sampler):
+    def __init__(self, data_source, batch_size):
+        self.data_source = data_source
+        self.batch_size = batch_size
+        self.num_batches = len(data_source) // batch_size
+        self.batch_indices = [list(range(i * batch_size, (i + 1) * batch_size)) 
+                              for i in range(self.num_batches)]
+
+    def __iter__(self):
+        # Shuffle the batches (order of batches)
+        random.shuffle(self.batch_indices)
+
+        for batch in self.batch_indices:
+            # Shuffle samples inside each batch
+            random.shuffle(batch)
+            yield batch
+
+    def __len__(self):
+        return self.num_batches
+
 def compute_loss(image_features, text_features, criterion, logit_scale):
     # Compute cosine similarity
     temperature = logit_scale
@@ -265,7 +286,9 @@ train_all_reorg = get_data_balanced(train_items)
 # train_all_reorg = get_data_balanced(train_all)
 train_dataset_2 = CustomDataset(train_all_reorg,preprocess,tokenizer)
 # train_dataloader_2 = torch.utils.data.DataLoader(train_dataset_2, batch_size=512,num_workers = 8, shuffle=False) 
-train_dataloader_2 = torch.utils.data.DataLoader(train_dataset_2, batch_size=100, shuffle=False) 
+batch_sampler = ShuffledBatchSampler(train_dataset_2, batch_size = 100)
+train_dataloader_2 = torch.utils.data.DataLoader(train_dataset_2, batch_sampler=batch_sampler)
+# train_dataloader_2 = torch.utils.data.DataLoader(train_dataset_2, batch_size=100, shuffle=False) 
 
 # val_dataset = CustomDataset(val_all,preprocess,tokenizer)
 # val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=512,num_workers = 8, shuffle=False)
