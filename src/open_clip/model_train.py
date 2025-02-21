@@ -371,3 +371,5 @@ def main():
             print(f"Patience limit exceeded. No more saving at epoch {epoch}")
             break
 
+if __name__ == "__main__":
+    main()
