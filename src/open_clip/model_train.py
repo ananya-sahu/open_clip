@@ -273,7 +273,9 @@ def main():
     batch_sampler2 = ShuffledBatchSampler(val_dataset, batch_size = 512)
     val_dataloader = torch.utils.data.DataLoader(val_dataset,batch_sampler=batch_sampler2, num_workers = 8)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    wrapped_model = CLIPWrapper(clip_model,5,768, method='second').to(device)
+
+    #num tasks, num_embeds, clip hidden dimension , method = third for concatentating prefix after image tokens
+    wrapped_model = CLIPWrapper(clip_model,5,5,768, method='third').to(device)
 
     # Freeze all parameters except task embeddings
     for param in wrapped_model.clip_model.parameters():
