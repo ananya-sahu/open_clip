@@ -297,7 +297,7 @@ def main():
     patience_counter = 0  # Counter for early stopping
     best_model = None
     best_recall = 0
-    for epoch in range(10):
+    for epoch in range(10): #num epochs in our paper =  1
         train_loss = 0.0
         wrapped_model.train()  # Set model to training mode
         for (images1,texts1, task_ids1),(images2,texts2, task_ids2) in tqdm(zip(train_dataloader_1,train_dataloader_2)):
